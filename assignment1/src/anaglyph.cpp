@@ -40,20 +40,18 @@ static bool rotating = false;
 static int numBoxes = 1;				// Debug: set numBoxes to 1.
 std::vector<glm::mat4> boxTransforms;	// We represent the scene by a single box and a number of transforms for drawing the box at different locations.
 
-// Anaglyph control 
-static float ipd = 0.65f;				// Distance between left/right eye.
+//anaglyph control
+static float ipd = 0.65f;
 static float convergenceDistance = 15.0f;
 
 
-//crap
-float eyeSeparation = 0.064f; // Adjust as needed
-float aspectRatio = windowWidth / windowHeight; // Calculate your aspect ratio
-float fovY = 45.0f; // Field of View in Y direction
-float nearClippingDistance = 0.1f;
-float farClippingDistance = 100.0f;
 
-float frustumShift = (eyeSeparation / 2.0f) * nearClippingDistance / convergenceDistance;
-float fovX = 2.0f * atan(tan(fovY / 2.0f) * aspectRatio);
+
+
+
+
+
+
 
 
 
@@ -103,21 +101,35 @@ static void generateScene() {
 		modelMatrix = glm::scale(modelMatrix, glm::vec3(16, 16, 16));
 		boxTransforms.push_back(modelMatrix);
 	} else {
-		// Generate boxes based on random position, rotation, and scale. 
-		// Store their transforms.
-		for (int i = 0; i < numBoxes; ++i) {
-			glm::vec3 position = 100.0f * (randomVec3() - 0.5f);
-			float s = (1 + (randomInt() % 4)) * 1.0f;
-			glm::vec3 scale(s, s, s);
-			float angle = randomFloat() * M_PI * 2;
-			glm::vec3 axis = glm::normalize(randomVec3() - 0.5f);
+        //scene stuff
+        //creates 6x6 grid for boxes to generate on
+        for (int z = -6; z <= 6; ++z) {
+            for (int x = -6; x <= 6; ++x) {
+                //positons are 8f by 8f apart
+                glm::vec3 position(x * 8.0f, 0, z * 8.0f);
 
-			glm::mat4 modelMatrix = glm::mat4();
-			modelMatrix = glm::translate(modelMatrix, position);
-			modelMatrix = glm::rotate(modelMatrix, angle, axis);
-			modelMatrix = glm::scale(modelMatrix, scale);
-			boxTransforms.push_back(modelMatrix);
-		}
+                //randomly scales the box between 1 and 5
+                float scaling = (1 + (randomInt() % 4)) * 1.0f;
+                //uniform scaling
+                glm::vec3 scale(scaling, scaling, scaling);
+
+                //randomly rotates the box
+                float angle = randomFloat() * M_PI * 2;
+                glm::vec3 axis = glm::normalize(randomVec3() - 0.5f);
+
+
+                glm::mat4 modelMatrix = glm::mat4();
+                //puts box into position
+                modelMatrix = glm::translate(modelMatrix, position);
+                //rotates the box
+                modelMatrix = glm::rotate(modelMatrix, angle, axis);
+                //scales the box
+                modelMatrix = glm::scale(modelMatrix, scale);
+
+                boxTransforms.push_back(modelMatrix);
+            }
+        }
+
 	}
 }
 
@@ -197,7 +209,6 @@ int main(void)
 	glm::mat4 projectionMatrix = glm::perspective(glm::radians(FoV), (float)windowWidth / windowHeight, zNear, zFar);
 
 	printAnaglyphMode();
-
 	do
 	{
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -225,18 +236,32 @@ int main(void)
 			glm::mat4 vpRight;
             glm::vec3 leftEyePosition, rightEyePosition;
             glm::vec3 convergencePoint;
+            //asymmetric view crap
+            float aspectRatio = float(windowWidth) / float(windowHeight);
+            //rendering distance crap
+            float nearPlane = 15.0f;
+            float farPlane = 200.0f;
+            //fov of asymmetric
+            float fovY = glm::radians(75.0f);
+            float halfWidth = tan(fovY / 2) * nearPlane;
+            //ipd
+            float halfIPD = (ipd/ 2.0f);
+            //frustum crap
+            float left = -aspectRatio * halfWidth - (ipd/ 2.0f);
+            float right = aspectRatio * halfWidth - (ipd/ 2.0f);
+            float bottom = -halfWidth;
+            float top = halfWidth;
 
 			if (anaglyphMode == ToeIn) {
 
-				// TODO: Implement the toe-in projection here
-				// ------------------------------------------------------------
-                leftEyePosition = eyeCenter - glm::vec3(ipd / 2.0f, 0.0f, 0.0f);
-                rightEyePosition = eyeCenter + glm::vec3(ipd / 2.0f, 0.0f, 0.0f);
-                convergencePoint = eyeCenter + glm::vec3(0.0f, 0.0f, -convergenceDistance);
+                leftEyePosition = eyeCenter - glm::vec3((halfIPD*10), 0.0f, 0.0f);
+                rightEyePosition = eyeCenter + glm::vec3((halfIPD*10), 0.0f, 0.0f);
+                convergencePoint = lookat - glm::vec3(0.0f, 0.0f, convergenceDistance);
 
-                glm::mat4 viewMatrixLeft = glm::lookAt(leftEyePosition, convergencePoint, up);
+                glm::mat4 viewMatrixLeft = glm::lookAt(leftEyePosition, convergencePoint,  glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 viewMatrixRight = glm::lookAt(rightEyePosition, convergencePoint,  glm::vec3(0.0f, 1.0f, 0.0f));
+
                 vpLeft = projectionMatrix * viewMatrixLeft;
-                glm::mat4 viewMatrixRight = glm::lookAt(rightEyePosition, convergencePoint, up);
                 vpRight = projectionMatrix * viewMatrixRight;
 
 
@@ -244,27 +269,18 @@ int main(void)
 
 				// TODO: Implement the asymmetric view frustum here
 				// ------------------------------------------------------------
-                float aspectRatio = float(windowWidth) / float(windowHeight);
-                float nearPlane = 1.0f;
-                float farPlane = 100.0f;
-                float fovY = glm::radians(60.0f);
-                float halfWidth = tan(fovY / 2) * nearPlane;
-                float halfIPD = (0.0325f);
 
-                // Left Frustum
-                float left = -aspectRatio * halfWidth - halfIPD;
-                float right = aspectRatio * halfWidth - halfIPD;
-                float bottom = -halfWidth;
-                float top = halfWidth;
+
                 glm::mat4 projectionLeft = glm::frustum(left, right, bottom, top, nearPlane, farPlane);
 
-                // Right Frustum
-                left = -aspectRatio * halfWidth + halfIPD;
-                right = aspectRatio * halfWidth + halfIPD;
+
+                //used halfipd/2 as i thought it looked better than just halfipd for asymmetric view,
+                left = -aspectRatio * halfWidth + (halfIPD/2.0f);
+                right = aspectRatio * halfWidth + (halfIPD/2.0f);
                 glm::mat4 projectionRight = glm::frustum(left, right, bottom, top, nearPlane, farPlane);
 
-                leftEyePosition = eyeCenter - glm::vec3(halfIPD, 0.0f, 0.0f);
-                rightEyePosition = eyeCenter + glm::vec3(halfIPD, 0.0f, 0.0f);
+                leftEyePosition = eyeCenter - glm::vec3((halfIPD/2.0f), 0.0f, 0.0f);
+                rightEyePosition = eyeCenter + glm::vec3((halfIPD/2.0f), 0.0f, 0.0f);
 
                 glm::mat4 viewMatrixLeft = glm::lookAt(leftEyePosition, lookat, up);
                 glm::mat4 viewMatrixRight = glm::lookAt(rightEyePosition, lookat, up);
@@ -277,19 +293,20 @@ int main(void)
 			// TODO: Implement two-pass rendering to draw the anaglyph
 			// ----------------------------------------------------------------
 
-            glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_TRUE); // Red channel for left eye
+            //renders boxes using asymmetric and toe-in
+            glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_TRUE);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             for (int i = 0; i < numBoxes; ++i) {
                 box.render(vpLeft, boxTransforms[i]);
             }
 
-            glColorMask(GL_FALSE, GL_TRUE, GL_TRUE, GL_TRUE); // Green and Blue channels for right eye
-            glClear(GL_DEPTH_BUFFER_BIT); // Clear only the depth buffer
+            glColorMask(GL_FALSE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glClear(GL_DEPTH_BUFFER_BIT);
             for (int i = 0; i < numBoxes; ++i) {
                 box.render(vpRight, boxTransforms[i]);
             }
 
-            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Reset color mask
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
         }
 
